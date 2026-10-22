@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from gguf import GGMLQuantizationType as Q
+from gguf import GGUFEndian
 
 from ggufkit import canon
 from ggufkit.cli import main
@@ -60,6 +61,18 @@ def test_manifest_shape(tiny_gguf: Path) -> None:
     assert "build_inputs.llama_cpp_commit" not in m["provenance_gaps"]
     assert m["provenance_score"]["expected"] == 9
     assert m["provenance_score"]["recorded"] == 9 - len(m["provenance_gaps"])
+
+
+def test_manifest_reports_big_endian(tmp_path: Path) -> None:
+    path = write_gguf(
+        tmp_path / "be.gguf",
+        kv=tiny_kv(),
+        tensors={"w": (det_floats((4, 8)), Q.F32)},
+        endianess=GGUFEndian.BIG,
+    )[0]
+    with open_model(path) as model:
+        manifest = build_manifest(model, data=False)
+    assert manifest["gguf"]["endianness"] == "big"
 
 
 def test_provenance_extraction_and_gaps(tmp_path: Path) -> None:

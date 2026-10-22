@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from gguf import GGMLQuantizationType as Q
+from gguf import GGUFEndian
 
 from ggufkit.cli import main
 from ggufkit.dequant import can_dequantize, to_f32
@@ -30,6 +31,18 @@ def test_dequantize_rows_matches_full(tiny_gguf: Path) -> None:
         full = to_f32(t, model.endianess)
         part = to_f32(t, model.endianess, rows=slice(10, 20))
         assert np.array_equal(part, full[10:20])
+
+
+def test_dequantize_big_endian_element_tensor(tmp_path: Path) -> None:
+    original = det_floats((8, 8), 22)
+    path = write_gguf(
+        tmp_path / "be.gguf",
+        tensors={"w": (original, Q.F32)},
+        endianess=GGUFEndian.BIG,
+    )[0]
+    with open_model(path) as model:
+        decoded = to_f32(model.tensor("w"), model.endianess)
+    assert np.array_equal(decoded, original)
 
 
 def test_q8_0_round_trip_is_close(tiny_gguf: Path) -> None:

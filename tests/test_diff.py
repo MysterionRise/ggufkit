@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from gguf import GGMLQuantizationType as Q
+from gguf import GGUFEndian
 
 from ggufkit.cli import main
 from ggufkit.diff import kv_diff, numeric_diff, summarize_value, tensor_diff
@@ -112,6 +113,21 @@ def test_numeric_diff_one_dimensional(tmp_path: Path) -> None:
         s = numeric_diff(ma.tensor("n"), mb.tensor("n"), ma.endianess, mb.endianess)
     assert s.rel_l2 == pytest.approx(0.5)
     assert s.cosine == pytest.approx(1.0)
+
+
+def test_numeric_diff_decodes_big_endian_element_tensors(tmp_path: Path) -> None:
+    data = det_floats((8, 8), 21)
+    little = write_gguf(tmp_path / "little.gguf", tensors={"w": (data, Q.F32)})[0]
+    big = write_gguf(
+        tmp_path / "big.gguf",
+        tensors={"w": (data, Q.F32)},
+        endianess=GGUFEndian.BIG,
+    )[0]
+    with open_model(little) as ma, open_model(big) as mb:
+        stats = numeric_diff(ma.tensor("w"), mb.tensor("w"), ma.endianess, mb.endianess)
+    assert stats.rmse == 0.0
+    assert stats.max_abs == 0.0
+    assert stats.cosine == pytest.approx(1.0)
 
 
 def test_diff_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

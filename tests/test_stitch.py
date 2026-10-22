@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 from gguf import GGMLQuantizationType as Q
+from gguf import GGUFEndian
 
+from ggufkit.canon import UnsupportedModelError
 from ggufkit.model import open_model
 from ggufkit.stitch import stitch
 from tests.conftest import det_floats, fingerprint_of, tiny_kv, tiny_tensors, write_gguf
@@ -52,3 +54,14 @@ def test_stitch_refuses_to_overwrite_without_force(tiny_gguf: Path, tmp_path: Pa
 def test_stitch_refuses_to_overwrite_an_input(tiny_gguf: Path) -> None:
     with pytest.raises(ValueError, match="must differ"):
         stitch(tiny_gguf, None, tiny_gguf)
+
+
+def test_stitch_refuses_big_endian_tensor_sources(tmp_path: Path) -> None:
+    metadata = write_gguf(tmp_path / "metadata.gguf", kv=tiny_kv())[0]
+    source = write_gguf(
+        tmp_path / "be.gguf",
+        tensors={"w": (det_floats((4, 8)), Q.F32)},
+        endianess=GGUFEndian.BIG,
+    )[0]
+    with pytest.raises(UnsupportedModelError, match="Big-endian tensor sources are not supported"):
+        stitch(metadata, source, tmp_path / "out.gguf")
