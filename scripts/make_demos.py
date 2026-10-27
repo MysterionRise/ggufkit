@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import importlib.metadata
 import json
 import os
 import shutil
@@ -47,6 +48,29 @@ TAMPER_FACTOR = 1.5
 COLUMNS = 50
 # Output lines longer than this are cut, with the cut marked (cosign prints a 100 KB envelope).
 MAX_LINE = 1000
+
+
+def get_tool_versions() -> dict[str, str | None]:
+    """Return the versions of the external tools used to record the demos."""
+
+    def first_line(*argv: str) -> str | None:
+        try:
+            out = subprocess.run(argv, capture_output=True, text=True, check=True)  # noqa: S603
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            return None
+        return out.stdout.strip().splitlines()[0] if out.stdout.strip() else None
+
+    try:
+        gguf_version = importlib.metadata.version("gguf")
+    except importlib.metadata.PackageNotFoundError:
+        gguf_version = None
+
+    return {
+        "cosign": first_line("cosign", "version"),
+        "ffmpeg": first_line("ffmpeg", "-version"),
+        "ggufkit": first_line("ggufkit", "--version"),
+        "gguf": gguf_version,
+    }
 
 
 def shell_lines(argv: list[str]) -> list[str]:
@@ -377,6 +401,7 @@ def main() -> int:
         paths = {name: fetch(name, sha, args.models_dir) for name, sha in FILES.items()}
         q4km = paths["Qwen3-0.6B-Q4_K_M.gguf"]
         rec = Recorder(cosign)
+        tools = get_tool_versions()
         print("* publishing the original")
         pub = publish(rec, args.work, q4km)
         recorded = json.loads(data.read_text()) if data.is_file() else {}
@@ -393,8 +418,10 @@ def main() -> int:
         for demo in recorded.values():
             for step in demo["steps"]:
                 step.pop("raw", None)
+        recorded["tools"] = tools
         data.write_text(json.dumps(recorded, indent=1))
         print(f"* recorded {data}")
+        print(f"* tools: {tools}")
     if not args.no_render:
         render(data, args.only)
     return 0
