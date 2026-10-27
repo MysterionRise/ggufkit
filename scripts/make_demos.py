@@ -32,6 +32,11 @@ from typing import Any
 
 import numpy as np
 from gguf import GGML_QUANT_SIZES, GGMLQuantizationType, GGUFReader
+
+# make_readme_assets sits next to this file. Python only puts scripts/ on sys.path for
+# `python scripts/make_demos.py`, so add it here for `python -m`, test runners and IDEs too.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from make_readme_assets import FILES, ROOT, fetch
 
 from ggufkit.dequant import to_f32
