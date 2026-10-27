@@ -18,13 +18,14 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 from gguf import GGMLQuantizationType, GGUFEndian
 from gguf.constants import Keys, LlamaFileType
 
 from ggufkit import __version__, canon
 from ggufkit._util import positive_int, prepare_output, write_text_atomic
+from ggufkit.errors import GGUFKitError
 from ggufkit.fingerprint import Fingerprint, default_jobs, fingerprint
 from ggufkit.model import SHARD_RE, open_model
 
@@ -83,8 +84,74 @@ EXPECTED_PROVENANCE: tuple[tuple[str, str], ...] = (
 )
 
 
-class ManifestError(ValueError):
+class ManifestError(GGUFKitError):
     """Raised for manifests ggufkit cannot read or does not understand."""
+
+
+class ManifestTool(TypedDict):
+    name: str
+    version: str
+    gguf_py: str
+    python: str
+    fingerprint_spec: str
+
+
+class ManifestShard(TypedDict):
+    no: int
+    count: int
+
+
+class ManifestFile(TypedDict):
+    path: str
+    size: int
+    sha256: str | None
+    shard: ManifestShard | None
+
+
+class ManifestGGUF(TypedDict):
+    version: int
+    endianness: str
+    alignment: int
+    n_kv: int
+    n_tensors: int
+    n_shards: int
+
+
+class ManifestModel(TypedDict):
+    architecture: str | None
+    file_type: str | None
+    file_type_id: int | None
+    quantization_version: Any
+    parameter_count: int
+    tensor_bytes: int
+    tensor_type_counts: dict[str, int]
+    tensor_type_bytes: dict[str, int]
+
+
+class ManifestScore(TypedDict):
+    recorded: int
+    expected: int
+
+
+class Manifest(TypedDict):
+    """A ``ggufkit-manifest/1`` manifest, as documented in ``docs/MANIFEST.md``.
+
+    ``provenance`` holds only the keys the file's metadata has, and ``fingerprint`` is the
+    fingerprint's JSON form (:meth:`ggufkit.Fingerprint.to_dict`), so both stay loosely typed.
+    """
+
+    schema: str
+    created_at: str
+    tool: ManifestTool
+    files: list[ManifestFile]
+    gguf: ManifestGGUF
+    model: ManifestModel
+    provenance: dict[str, Any]
+    provenance_gaps: list[str]
+    provenance_score: ManifestScore
+    build_inputs: dict[str, str]
+    notes: str | None
+    fingerprint: dict[str, Any]
 
 
 def _kv(model: Model, key: str) -> Any | None:
@@ -246,7 +313,7 @@ def file_type_label(file_type_id: int | None) -> str | None:
     return name
 
 
-def model_facts(model: Model) -> dict[str, Any]:
+def model_facts(model: Model) -> ManifestModel:
     file_type_id = _kv(model, Keys.General.FILE_TYPE)
     counts = Counter(t.tensor_type.name for t in model.tensors)
     bytes_by_type: Counter[str] = Counter()
@@ -272,7 +339,7 @@ def sha256_file(path: Path, chunk_size: int = canon.CHUNK_SIZE) -> str:
     return digest.hexdigest()
 
 
-def file_entries(model: Model, *, with_sha256: bool) -> list[dict[str, Any]]:
+def file_entries(model: Model, *, with_sha256: bool) -> list[ManifestFile]:
     n = model.n_shards
     return [
         {
@@ -306,7 +373,7 @@ def build_manifest(
     data: bool = True,
     per_tensor: bool = True,
     jobs: int = 1,
-) -> dict[str, Any]:
+) -> Manifest:
     if fp is None:
         fp = fingerprint(model, data=data, per_tensor=per_tensor, per_kv=True, jobs=jobs)
     inputs = dict(build_inputs or {})
@@ -349,7 +416,7 @@ def build_manifest(
     }
 
 
-def load_manifest(path: str | Path) -> dict[str, Any]:
+def load_manifest(path: str | Path) -> Manifest:
     try:
         manifest = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
@@ -363,7 +430,7 @@ def load_manifest(path: str | Path) -> dict[str, Any]:
         msg = f"{path} carries a fingerprint spec ggufkit does not understand"
         raise ManifestError(msg)
     _check_structure(path, manifest)
-    return manifest
+    return cast("Manifest", manifest)
 
 
 def _check_structure(path: str | Path, manifest: dict[str, Any]) -> None:

@@ -5,7 +5,8 @@
 Run it with the Python of the environment the wheel or sdist was installed into: CI and the
 release workflow do, before anything is published. It writes a tiny GGUF model with gguf-py,
 then fingerprints it, writes and verifies a manifest, edits the metadata and checks that the
-edit is reported as metadata-only, and renders a tensor if Pillow is installed.
+edit is reported as metadata-only, checks the Python API agrees, and renders a tensor if
+Pillow is installed.
 """
 
 from __future__ import annotations
@@ -18,6 +19,8 @@ from pathlib import Path
 
 import numpy as np
 from gguf import GGUFWriter
+
+from ggufkit import fingerprint_file, verify_file
 
 
 def ggufkit(*args: str, expect: int = 0) -> str:
@@ -61,6 +64,9 @@ def main() -> int:
 
         fp = json.loads(ggufkit("fingerprint", str(model), "--json"))
         check(fp["spec"] == "ggufkit-fp/1", f"fingerprint spec {fp['spec']}")
+        check(fingerprint_file(model).overall == fp["overall"], "API and CLI differ")
+        api_report = verify_file(renamed, against=model)
+        check(api_report.verdict == "metadata-only", f"API verdict {api_report.verdict}")
         ggufkit("manifest", str(model), "-o", str(d / "m.json"), "--file-sha256", "-q")
         ggufkit("verify", str(model), "--manifest", str(d / "m.json"), "--file-sha256")
         report = json.loads(

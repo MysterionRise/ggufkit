@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING
 from gguf import GGUFEndian, GGUFReader
 from gguf.constants import Keys
 
+from ggufkit.errors import GGUFKitError
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -41,7 +43,7 @@ SPLIT_FIELDS = frozenset(
 )
 
 
-class ModelError(ValueError):
+class ModelError(GGUFKitError):
     """Raised when a model cannot be opened as a consistent whole."""
 
 

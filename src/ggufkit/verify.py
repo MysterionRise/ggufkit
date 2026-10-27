@@ -23,7 +23,7 @@ from ggufkit.model import open_model
 
 if TYPE_CHECKING:
     import argparse
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
     from ggufkit.model import Model
 
@@ -258,7 +258,7 @@ def compare(
 
 def verify_against_manifest(
     model: Model,
-    manifest: dict[str, Any],
+    manifest: Mapping[str, Any],
     *,
     manifest_label: str = "manifest",
     data: bool = True,
@@ -280,7 +280,7 @@ def verify_against_manifest(
     return report
 
 
-def _check_files(model: Model, manifest: dict[str, Any], notes: list[str]) -> str:
+def _check_files(model: Model, manifest: Mapping[str, Any], notes: list[str]) -> str:
     """Compare raw file hashes with the manifest: "match", "mismatch" or "not checked"."""
     recorded = {f["path"]: f for f in manifest.get("files") or []}
     status = "match"

@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 from gguf import GGUFEndian, GGUFValueType
 
+from ggufkit.errors import GGUFKitError
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -51,7 +53,7 @@ _SCALAR_TYPES = frozenset(
 )
 
 
-class UnsupportedModelError(ValueError):
+class UnsupportedModelError(GGUFKitError):
     """Raised for files whose canonical form ggufkit cannot compute yet."""
 
 

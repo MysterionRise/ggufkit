@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- A stable Python API: `ggufkit.fingerprint_file`, `create_manifest`, `verify_file`,
+  `load_manifest` and `save_manifest` take paths and return `Fingerprint`, `Manifest` (a
+  `TypedDict` of the documented format) and `Report`. The names in `ggufkit.__all__` change
+  only in a major release or after a deprecation period; `import ggufkit` stays light and
+  loads them on first use. See the README's "Python API" section.
+- `ggufkit.GGUFKitError`, a common base for `ModelError`, `UnsupportedModelError`,
+  `ManifestError` and `IntotoError`. It subclasses `ValueError`, so existing handlers still
+  work.
 - Test vectors for `ggufkit-fp/1` in `tests/vectors/`: 13 tiny GGUF files and their
   expected digests (`vectors.json`), covering every element type, BF16 and quantized types,
   every metadata value type, key ordering, reordering, sharding, big-endian, alignment, and
