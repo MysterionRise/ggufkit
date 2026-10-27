@@ -369,6 +369,10 @@ Tests build tiny GGUF files in-process; nothing is downloaded. `pytest --update-
 rewrites the golden fingerprints after a deliberate spec change (bump the spec id too).
 Releases are published to PyPI from a `vX.Y.Z` tag by `.github/workflows/release.yml`, with
 build provenance and PyPI attestations; see [docs/RELEASING.md](https://github.com/MysterionRise/ggufkit/blob/main/docs/RELEASING.md).
+Want to help? [CONTRIBUTING.md](https://github.com/MysterionRise/ggufkit/blob/main/CONTRIBUTING.md#where-to-start)
+lists where to start; issues labelled
+[good first issue](https://github.com/MysterionRise/ggufkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+each say what to change and when it's done.
 
 ## Origins
 

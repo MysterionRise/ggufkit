@@ -2,6 +2,16 @@
 
 Thanks for helping. Bug reports with a reproducing command are as welcome as code.
 
+## Where to start
+
+Issues labelled
+[good first issue](https://github.com/MysterionRise/ggufkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+are small and self-contained: each says which files to touch, which existing test to copy, and
+when it's done. Issues labelled
+[help wanted](https://github.com/MysterionRise/ggufkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
+are bigger but just as well defined. Comment on an issue to say you're taking it, so two people
+don't do the same work, and ask there if anything is unclear.
+
 ## Set up
 
 ```sh
