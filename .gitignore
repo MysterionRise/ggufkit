@@ -161,6 +161,7 @@ cython_debug/
 
 # ggufkit
 *.gguf
+!tests/vectors/*.gguf
 *.manifest.json
 /scratch/
 .ruff_cache/
