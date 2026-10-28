@@ -117,12 +117,20 @@ jobs:
             echo "::error::CHANGELOG.md has no section for ${version}"
             exit 1
           fi
-      - name: Create the release
+      - name: Create the release, or fill in one made on GitHub's Releases page
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/* \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "ggufkit ${GITHUB_REF_NAME#v}" \
-            --notes-file notes.md \
-            --verify-tag
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
+            gh release edit "${GITHUB_REF_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "ggufkit ${GITHUB_REF_NAME#v}" \
+              --notes-file notes.md
+          else
+            gh release create "${GITHUB_REF_NAME}" dist/* \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "ggufkit ${GITHUB_REF_NAME#v}" \
+              --notes-file notes.md \
+              --verify-tag
+          fi
