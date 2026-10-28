@@ -50,6 +50,7 @@ def malformed_files(tmp_path: Path, good: Path) -> dict[str, Path]:
         ),
         "huge-string": raw_gguf([gguf_string("a") + struct.pack("<IQ", V.STRING, 1 << 50)]),
         "huge-counts": raw_gguf([], n_kv=1 << 60),
+        "huge-unit8-array": raw_gguf([gguf_string("a") + struct.pack("<IIQ", V.ARRAY, V.UINT8, 1 << 40)]),
         "unknown-type": raw_gguf([gguf_string("a") + struct.pack("<I", 99) + b"\x00" * 8]),
         "duplicate-key": raw_gguf([kv_u32("general.x", 1), kv_u32("general.x", 2)]),
     }
@@ -100,7 +101,7 @@ def test_malformed_files_exit_2_without_traceback(
 
 
 def test_header_check_rejects_before_the_reader_runs(bad_files: dict[str, Path]) -> None:
-    for name in ("huge-array", "huge-string", "huge-counts", "unknown-type", "truncated-header"):
+    for name in ("huge-array", "huge-string", "huge-counts","huge-uint8-array", "unknown-type", "truncated-header"):
         with pytest.raises(ModelError, match="not a valid GGUF file"):
             check_header(bad_files[name])
 
