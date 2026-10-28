@@ -4,7 +4,10 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-28
+
+A stable Python API and published test vectors for the fingerprint. No fingerprint or manifest
+format changes: every `ggufkit-fp/1` digest from 0.1.0 is unchanged.
 
 ### Added
 
@@ -81,4 +84,5 @@ First release. Supports Python 3.11 to 3.14.
 Builds on [KerfuffleV2/gguf-tools](https://github.com/KerfuffleV2/gguf-tools) (MIT, 2023):
 `gguf-checksum`, `gguf-frankenstein` and `gguf-tensor-to-image`, whose history is preserved.
 
+[0.2.0]: https://github.com/MysterionRise/ggufkit/releases/tag/v0.2.0
 [0.1.0]: https://github.com/MysterionRise/ggufkit/releases/tag/v0.1.0
