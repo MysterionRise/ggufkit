@@ -48,9 +48,13 @@ publishing).
    git push origin v0.1.0
    ```
 
-   Push the tag from the command line, not with GitHub's *Releases → Draft a new release*:
-   that creates the release itself, and the workflow's own `gh release create` then fails
-   because the release already exists.
+   Without a terminal, use GitHub's *Releases → Draft a new release* instead:
+   - choose a tag, type `v0.1.0`, and pick *Create new tag on publish*, with target `main`;
+   - leave the title and description empty;
+   - click *Publish release*. A draft creates no tag, so it starts nothing.
+
+   Publishing creates the tag, which starts the workflow. The workflow then attaches the
+   wheel and sdist to that release and fills in its title and the CHANGELOG notes.
 
 4. **Watch the workflow.** It checks that the tag matches `pyproject.toml` and is on `main`,
    runs CI, builds, smoke-tests and attests, then waits for your approval on the `pypi`
