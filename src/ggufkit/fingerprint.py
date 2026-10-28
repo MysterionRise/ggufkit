@@ -4,8 +4,9 @@ A fingerprint has three independent parts, so you can tell *what* changed betwee
 
 - ``kv``: the metadata, sorted by key, so reordering or re-saving does not change it;
 - ``tensor_info``: every tensor's name, shape and quantization type, sorted by name;
-- ``weights``: the stored bytes of every tensor, as a multiset, so renaming or reordering
-  tensors does not change it (renames show up in ``tensor_info`` instead).
+- ``weights``: the stored bytes of every tensor, bound to its name and sorted by name, so
+  reordering tensors or sharding does not change it, while swapping two tensors' data or
+  renaming a tensor does (the per-tensor ``data`` digests show a rename as the same bytes).
 
 ``overall`` binds the three together. This is a rewrite of KerfuffleV2's ``gguf-checksum``
 on a documented byte format; see ``docs/FINGERPRINT.md``.

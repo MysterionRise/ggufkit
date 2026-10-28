@@ -324,6 +324,33 @@ Errors are a malformed or unreadable file, a malformed manifest, an output file 
 without `--force`, or invalid arguments; they print one line starting with `error:`. Ctrl-C
 exits 130, and a closed output pipe 141.
 
+## Python API
+
+The same checks are available from Python, on paths:
+
+```python
+import ggufkit
+
+fp = ggufkit.fingerprint_file("model.gguf")  # any shard of a split model works too
+print(fp.overall, fp.weights)
+
+report = ggufkit.verify_file("download.gguf", against="model.gguf")
+if not report.ok(allow_metadata=True):
+    raise SystemExit(f"{report.verdict}: {[str(c) for c in report.tensor_changes or []]}")
+
+manifest = ggufkit.create_manifest("model.gguf", file_sha256=True)
+ggufkit.save_manifest("model.manifest.json", manifest)
+ggufkit.verify_file("model.gguf", manifest="model.manifest.json", file_sha256=True).ok()
+```
+
+`fingerprint_file`, `create_manifest`, `verify_file`, `load_manifest` and `save_manifest`
+return `Fingerprint`, `Manifest` (a typed dict in the documented format) and `Report`
+objects. Every error ggufkit raises for bad input is a `ggufkit.GGUFKitError`, itself a
+`ValueError`. The names in `ggufkit.__all__` are stable: they change only in a major release,
+or after a deprecation warning that lasts at least one minor release. The submodules
+(`ggufkit.fingerprint`, `ggufkit.verify`, …) are the command line's implementation and may
+change in any release. `import ggufkit` loads nothing heavy until you use one of the names.
+
 ## FAQ
 
 **How is this different from `sha256sum` or the hashes Hugging Face shows?** Those hash bytes.
@@ -346,10 +373,10 @@ same; a change to what is hashed gets a new spec id, and ggufkit keeps verifying
 Manifests (`ggufkit-manifest/1`) only gain optional fields. See
 [docs/FINGERPRINT.md](https://github.com/MysterionRise/ggufkit/blob/main/docs/FINGERPRINT.md) and [docs/MANIFEST.md](https://github.com/MysterionRise/ggufkit/blob/main/docs/MANIFEST.md).
 
-**Can I use it from Python?** The modules (`ggufkit.fingerprint`, `ggufkit.verify`,
-`ggufkit.manifest`, …) can be imported, but the Python API is provisional in 0.x and may
-change between minor releases. What 0.x keeps stable is the command line, its exit codes, and
-the fingerprint and manifest formats.
+**Can I use it from Python?** Yes: see [Python API](#python-api). The names exported by
+`import ggufkit` are stable, as are the command line, its exit codes, and the fingerprint and
+manifest formats. Other implementations of the fingerprint can test against the vectors in
+[tests/vectors](https://github.com/MysterionRise/ggufkit/tree/main/tests/vectors).
 
 ## Roadmap
 
