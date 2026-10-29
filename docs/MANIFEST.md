@@ -70,6 +70,11 @@ Other options:
 `expected` is 9 for a file with sub-8-bit tensors and 7 otherwise. The score measures
 documentation, not trustworthiness: every value except the fingerprint is a claim.
 
+The build inputs are what it takes to check a file by rebuilding it: `ggufkit reproduce`
+runs `llama-quantize` on the source with the importance matrix and compares the result with
+the file (see the README). Today you pass the source and the matrix on its command line; a
+later release reads them from a manifest and checks their hashes first.
+
 ## Verifying
 
 ```sh

@@ -2,10 +2,11 @@
 
     uv run python scripts/make_readme_assets.py [--models-dir DIR]
 
-Downloads three files of unsloth/Qwen3-0.6B-GGUF (Apache-2.0, base Qwen/Qwen3-0.6B) at a
-pinned revision, about 2 GB, checks each against the sha256 recorded below, then runs the
-ggufkit commands behind the README's images and console examples. Images go to assets/;
-command output is printed so it can be pasted into the README.
+Downloads three models and the importance matrix of unsloth/Qwen3-0.6B-GGUF (Apache-2.0,
+base Qwen/Qwen3-0.6B) at a pinned revision, about 2 GB, checks each against the sha256
+recorded below, then runs the ggufkit commands behind the README's images and console
+examples. Images go to assets/; command output is printed so it can be pasted into the
+README. The reproduce example also needs llama.cpp's llama-quantize on PATH.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ FILES = {
     "Qwen3-0.6B-BF16.gguf": "f9c9f1d3c1e21755b82d4e165f88dbbbd4355646d632fb5d6cef7c66ed4ee04e",
     "Qwen3-0.6B-Q4_K_M.gguf": "ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a",
     "Qwen3-0.6B-UD-Q4_K_XL.gguf": "ed2dd561f8aa5651cfb198be583269779e26ca6e28c40dba94fc2da4432bde2a",
+    "imatrix_unsloth.dat": "8eeffbe08370c5cc1a27adb534ff7940094691b18d406f7bb624f3fc0e08f39e",
 }
 # Square, so it reads well at the top of the README.
 HERO_TENSOR = "blk.0.attn_k.weight"
@@ -148,6 +150,13 @@ def main() -> int:
     ggufkit("verify", str(edited), "--manifest", str(manifest))
     ggufkit("verify", udxl, "--against", q4km)
     ggufkit("diff", bf16, q4km, "--no-kv", "--numeric", "--top", "8")
+
+    if shutil.which("llama-quantize") is None:
+        print("\nllama-quantize is not on PATH: skipping the reproduce example", file=sys.stderr)
+        return 0
+    imatrix = str(paths["imatrix_unsloth.dat"])
+    ggufkit("reproduce", q4km, "--source", bf16, "--imatrix", imatrix)
+    ggufkit("reproduce", q4km, "--source", bf16, "--imatrix", imatrix, "--type", "Q4_K_S")
     return 0
 
 

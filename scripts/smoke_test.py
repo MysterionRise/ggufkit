@@ -5,8 +5,8 @@
 Run it with the Python of the environment the wheel or sdist was installed into: CI and the
 release workflow do, before anything is published. It writes a tiny GGUF model with gguf-py,
 then fingerprints it, writes and verifies a manifest, edits the metadata and checks that the
-edit is reported as metadata-only, checks the Python API agrees, and renders a tensor if
-Pillow is installed.
+edit is reported as metadata-only, checks the Python API agrees, runs reproduce with a
+stand-in for llama-quantize (not on Windows), and renders a tensor if Pillow is installed.
 """
 
 from __future__ import annotations
@@ -75,6 +75,30 @@ def main() -> int:
         check(report["verdict"] == "metadata-only", f"verdict {report['verdict']}")
         ggufkit("diff", str(model), str(renamed), "--numeric", expect=1)
         ggufkit("fingerprint", str(d / "missing.gguf"), expect=2)
+        if sys.platform != "win32":
+            # Stands in for llama-quantize SOURCE OUT TYPE: writes the renamed model as OUT.
+            stand_in = d / "llama-quantize"
+            stand_in.write_text(
+                f"#!{sys.executable}\nimport shutil, sys\n"
+                f"shutil.copyfile({str(renamed)!r}, sys.argv[2])\n"
+            )
+            stand_in.chmod(0o755)
+            rebuilt = json.loads(
+                ggufkit(
+                    "reproduce",
+                    str(model),
+                    "--source",
+                    str(model),
+                    "--type",
+                    "F32",
+                    "--llama-quantize",
+                    str(stand_in),
+                    "--json",
+                    expect=1,
+                )
+            )
+            check(rebuilt["verdict"] == "metadata-only", f"reproduce {rebuilt['verdict']}")
+            check(rebuilt["byte_identical"] is False, "reproduce compared the bytes wrongly")
         try:
             import PIL  # noqa: F401
         except ImportError:

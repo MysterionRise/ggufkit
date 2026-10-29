@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `ggufkit reproduce TARGET --source SOURCE [--imatrix FILE]`: rebuild a quantized file with
+  llama.cpp's `llama-quantize` and compare the rebuild with it, as `verify --against` does,
+  plus the raw bytes. The type comes from `general.file_type` (`--type` overrides it). A file
+  that records an importance matrix needs it (`--imatrix`), and the matrix is placed at the
+  relative path the file records, so `quantize.imatrix.file` matches too. Exit status 0
+  when identical, 1 when it differs, 2 when no rebuild could be made. With Unsloth's
+  importance matrix, it rebuilds their Qwen3-0.6B Q4_K_M and Q8_0 files byte for byte (#22).
+- `ggufkit.reproduce_file`, `ReproduceResult` and `ReproduceError` in the Python API.
+
 ## [0.2.0] - 2026-10-28
 
 A stable Python API and published test vectors for the fingerprint. No fingerprint or manifest

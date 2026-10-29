@@ -12,6 +12,7 @@ Fingerprint, verify and visualize [GGUF](https://github.com/ggml-org/ggml/blob/m
 - Is this GGUF the same model as that one, even though the bytes differ?
 - Did a re-upload change the weights, or only the metadata? Which keys, which tensors?
 - Does this file document where it came from well enough to reproduce it?
+- Can it be rebuilt from its source with llama.cpp, byte for byte?
 - How far is this quantization from its source, tensor by tensor, and where inside each tensor?
 - Which quantization type did each tensor get?
 - What does `blk.17.attn_q.weight` actually look like?
@@ -34,7 +35,7 @@ screen.*
 Every example below is real output on
 [unsloth/Qwen3-0.6B-GGUF](https://huggingface.co/unsloth/Qwen3-0.6B-GGUF) (Apache-2.0) at
 revision `50968a4`. [`scripts/make_readme_assets.py`](https://github.com/MysterionRise/ggufkit/blob/main/scripts/make_readme_assets.py) downloads
-the three files, checks their sha256 and reruns every command;
+the files, checks their sha256 and reruns every command;
 [`scripts/make_demos.py`](https://github.com/MysterionRise/ggufkit/blob/main/scripts/make_demos.py) records the animations from the same
 files.
 
@@ -184,6 +185,65 @@ or `weights-changed`. The exit status is 0 only for `identical`, so it drops int
 download scripts; `--allow-metadata` also accepts `metadata-only`, and `--ignore-keys` takes
 globs for keys you expect to change.
 
+### Reproduce a quantization
+
+llama.cpp's `llama-quantize` is deterministic: the same source, importance matrix and type
+give the same file, byte for byte, whatever the thread count or CPU build. Three llama.cpp
+releases, from May to October 2026, all rebuild Unsloth's Qwen3-0.6B Q4_K_M and Q8_0 files
+exactly ([#22](https://github.com/MysterionRise/ggufkit/issues/22)). So a published quant can be checked by making it again:
+
+```console
+$ ggufkit reproduce Qwen3-0.6B-Q4_K_M.gguf --source Qwen3-0.6B-BF16.gguf --imatrix imatrix_unsloth.dat
+running llama-quantize (Q4_K_M); this can take a while
+comparing the rebuild with Qwen3-0.6B-Q4_K_M.gguf
+type         Q4_K_M
+llama.cpp    0.8.0-dev (build 1, commit 8642541)
+command      /usr/local/bin/llama-quantize --imatrix Qwen3-0.6B-GGUF/imatrix_unsloth.dat /home/user/models/Qwen3-0.6B-BF16.gguf /tmp/ggufkit-reproduce-kpfp1ms9/rebuilt.gguf Q4_K_M
+file bytes   identical
+verdict      identical
+kv           same
+tensor_info  same
+weights      same
+```
+
+`reproduce` takes the quantization type from the file's `general.file_type` (`--type`
+overrides it) and runs `llama-quantize` on the source, the one on PATH or
+`--llama-quantize PATH`. It then compares the rebuild with the file, as `verify --against`
+does, and also compares the raw bytes. Here it took 20 seconds for the quantization and 10
+for the comparison, on 4 cores.
+
+A file quantized with an importance matrix records it in its `quantize.imatrix.*` keys. The
+matrix sets the quantization scales, so the rebuild needs the same one: without `--imatrix`,
+`reproduce` stops and names the recorded file and dataset. `llama-quantize` also records the
+matrix's path exactly as it was given (here Unsloth's `Qwen3-0.6B-GGUF/imatrix_unsloth.dat`),
+so `reproduce` runs it in a temporary directory with the matrix at that relative path.
+
+When the rebuild differs, the report says how. The same file rebuilt as Q4_K_S:
+
+```console
+$ ggufkit reproduce Qwen3-0.6B-Q4_K_M.gguf --source Qwen3-0.6B-BF16.gguf --imatrix imatrix_unsloth.dat --type Q4_K_S
+…
+file bytes   differ
+verdict      weights-changed
+kv           differs
+tensor_info  differs
+weights      differs
+metadata changes:
+  ~ general.file_type
+tensor changes:
+  ~ blk.0.attn_v.weight  retyped  Q6_K -> Q5_K
+  ~ blk.0.ffn_down.weight  retyped  Q6_K -> Q5_K
+  …
+```
+
+The exit status is 0 when the rebuild is identical, 1 when it differs (`--allow-metadata`
+accepts a metadata-only difference), and 2 when no rebuild could be made. `--keep FILE`
+saves the rebuild for `diff` or `viz error`, and `--json` prints the report with the
+command and the llama.cpp version. Files made with per-tensor type overrides
+(`llama-quantize --tensor-type`, as in Unsloth's dynamic `UD-` quants) or a modified
+llama.cpp do not rebuild with plain `llama-quantize`; `reproduce` then lists the tensors that
+differ. Determinism was checked on x86_64 Linux; other platforms are not checked yet.
+
 ### Diff two models
 
 ```console
@@ -308,15 +368,17 @@ PyTorch checkpoints work too when `torch` is installed (`--model-type torch`).
 - **A passing `verify` always means the weights were compared.** Against a manifest made with
   `--no-data`, `verify` fails unless you ask for a metadata-only check with `verify --no-data`.
 - **Neither proves that a quantized file was faithfully built from the model it names, or that
-  a model is benign.** For that, re-quantize the source with the recorded build inputs and
-  compare: `verify --against` tells you whether you reproduced the file, and
-  `diff --numeric` tells you how far apart the two are when you did not.
+  a model is benign.** For the first, rebuild it: `reproduce` re-quantizes the source and
+  says whether the result is the same file, and `diff --numeric` tells you how far apart
+  the two are when it is not. A passing `reproduce` proves the file is what llama.cpp makes
+  from that source and importance matrix; check the source's own hash against its publisher.
 
 ## Exit codes
 
 | command | 0 | 1 | 2 |
 |---|---|---|---|
 | `verify` | identical (or metadata-only with `--allow-metadata`) | any other difference; weights or file hashes that could not be compared | error |
+| `reproduce` | the rebuild is identical (or metadata-only with `--allow-metadata`) | the rebuild differs | error, including a missing importance matrix or a failed `llama-quantize` |
 | `diff` | nothing differs in the compared sections | something differs | error |
 | `fingerprint`, `manifest`, `stitch`, `viz` | done | | error |
 
@@ -341,11 +403,15 @@ if not report.ok(allow_metadata=True):
 manifest = ggufkit.create_manifest("model.gguf", file_sha256=True)
 ggufkit.save_manifest("model.manifest.json", manifest)
 ggufkit.verify_file("model.gguf", manifest="model.manifest.json", file_sha256=True).ok()
+
+result = ggufkit.reproduce_file("model-Q4_K_M.gguf", source="model-BF16.gguf", imatrix="imatrix.dat")
+print(result.ok(), result.byte_identical, result.report.verdict)
 ```
 
 `fingerprint_file`, `create_manifest`, `verify_file`, `load_manifest` and `save_manifest`
 return `Fingerprint`, `Manifest` (a typed dict in the documented format) and `Report`
-objects. Every error ggufkit raises for bad input is a `ggufkit.GGUFKitError`, itself a
+objects; `reproduce_file` returns a `ReproduceResult` and raises `ReproduceError` when no
+rebuild could be made. Every error ggufkit raises for bad input is a `ggufkit.GGUFKitError`, itself a
 `ValueError`. The names in `ggufkit.__all__` are stable: they change only in a major release,
 or after a deprecation warning that lasts at least one minor release. The submodules
 (`ggufkit.fingerprint`, `ggufkit.verify`, …) are the command line's implementation and may
@@ -381,7 +447,8 @@ manifest formats. Other implementations of the fingerprint can test against the 
 ## Roadmap
 
 - A gallery of error maps and quant maps for popular open models, built from the real files.
-- A one-shot "reproduce this quant" check that drives `llama-quantize` from a manifest.
+- `reproduce --manifest`: take the source, importance matrix and llama.cpp revision from a
+  manifest's build inputs, and check their hashes before rebuilding.
 
 ## Development
 

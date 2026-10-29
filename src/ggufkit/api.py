@@ -1,4 +1,4 @@
-"""ggufkit's stable Python API: three functions that take paths and return plain results.
+"""ggufkit's stable Python API: functions that take paths and return plain results.
 
 Everything listed in ``ggufkit.__all__`` is stable: it changes only in a major release, or
 after a deprecation warning that lasts at least one minor release. Import it from the
@@ -18,16 +18,18 @@ implementation and may change in any release.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ggufkit._util import prepare_output
 from ggufkit.fingerprint import Fingerprint, fingerprint
 from ggufkit.manifest import Manifest, build_manifest, load_manifest
 from ggufkit.model import open_model
+from ggufkit.reproduce import ReproduceResult, reproduce
 from ggufkit.verify import Report, verify_against_file, verify_against_manifest
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
 
 
 def fingerprint_file(
@@ -124,3 +126,40 @@ def verify_file(
             )
     msg = "give exactly one of against= or manifest="
     raise TypeError(msg)
+
+
+def reproduce_file(
+    path: str | Path,
+    *,
+    source: str | Path,
+    imatrix: str | Path | None = None,
+    quant_type: str | None = None,
+    llama_quantize: str | Path | None = None,
+    threads: int | None = None,
+    keep: str | Path | None = None,
+    force: bool = False,
+    jobs: int = 1,
+) -> ReproduceResult:
+    """Rebuild a quantized GGUF file from its source with llama-quantize, and compare.
+
+    ``source`` is the full-precision model it was made from. ``imatrix`` is the importance
+    matrix, which a file that records one needs. ``quant_type`` defaults to the file's
+    ``general.file_type``, and ``llama_quantize`` to the binary on PATH. ``keep`` saves the
+    rebuild (``force`` overwrites an existing file). :meth:`ReproduceResult.ok` is the pass
+    or fail, and :attr:`ReproduceResult.report` says what differs.
+
+    Raises :class:`ggufkit.ReproduceError` when no rebuild could be made.
+    """
+    if keep is not None:
+        prepare_output(Path(keep), force=force)
+    with open_model(path) as model:
+        return reproduce(
+            model,
+            source,
+            imatrix=imatrix,
+            quant_type=quant_type,
+            threads=threads,
+            llama_quantize=llama_quantize,
+            keep=keep,
+            jobs=jobs,
+        )
