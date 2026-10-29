@@ -404,7 +404,9 @@ manifest = ggufkit.create_manifest("model.gguf", file_sha256=True)
 ggufkit.save_manifest("model.manifest.json", manifest)
 ggufkit.verify_file("model.gguf", manifest="model.manifest.json", file_sha256=True).ok()
 
-result = ggufkit.reproduce_file("model-Q4_K_M.gguf", source="model-BF16.gguf", imatrix="imatrix.dat")
+result = ggufkit.reproduce_file(
+    "model-Q4_K_M.gguf", source="model-BF16.gguf", imatrix="imatrix.dat"
+)
 print(result.ok(), result.byte_identical, result.report.verdict)
 ```
 
