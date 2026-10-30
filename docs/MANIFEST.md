@@ -15,15 +15,20 @@ absent.
 
 ```sh
 ggufkit manifest model-Q4_K_M.gguf \
-  --input source_sha256=<sha256 of the BF16 source> \
-  --input imatrix_sha256=<sha256 of imatrix.dat> \
+  --source model-BF16.gguf \
+  --imatrix imatrix.dat \
   --input llama_cpp_commit=b8146 \
   --input "quantize_cmd=llama-quantize --imatrix imatrix.dat model-BF16.gguf model-Q4_K_M.gguf Q4_K_M" \
   --file-sha256
 ```
 
-This writes `model-Q4_K_M.manifest.json` next to the model. Publish it with the model; anyone
-can then run `ggufkit verify model-Q4_K_M.gguf --manifest model-Q4_K_M.manifest.json`.
+This writes `model-Q4_K_M.manifest.json` next to the model. `--source` and `--imatrix` hash
+those files into `source_sha256` and `imatrix_sha256`. Publish the manifest with the model.
+Anyone can then check a download with
+`ggufkit verify model-Q4_K_M.gguf --manifest model-Q4_K_M.manifest.json`, and rebuild the
+file from its inputs with
+`ggufkit reproduce --manifest model-Q4_K_M.manifest.json --source model-BF16.gguf --imatrix imatrix.dat`
+(see [Build inputs](#build-inputs)).
 
 Other options:
 
@@ -70,10 +75,33 @@ Other options:
 `expected` is 9 for a file with sub-8-bit tensors and 7 otherwise. The score measures
 documentation, not trustworthiness: every value except the fingerprint is a claim.
 
-The build inputs are what it takes to check a file by rebuilding it: `ggufkit reproduce`
-runs `llama-quantize` on the source with the importance matrix and compares the result with
-the file (see the README). Today you pass the source and the matrix on its command line; a
-later release reads them from a manifest and checks their hashes first.
+## Build inputs
+
+`build_inputs` holds strings. Any key is kept, and these four are the ones
+`ggufkit reproduce --manifest` reads to rebuild the file and compare the result with the
+manifest:
+
+| key | how it is read |
+|---|---|
+| `source_sha256` | the sha256 of the source the file was quantized from. For a split source, each shard's sha256, comma-separated in shard order (`manifest --source` writes it that way). `reproduce` hashes the `--source` it is given and stops with exit 2 on a mismatch. |
+| `imatrix_sha256` | the sha256 of the importance matrix, checked the same way against `--imatrix`. |
+| `llama_cpp_commit` | the llama.cpp revision: a commit hash (any prefix of 7 or more characters) or a release tag like `b8146`. `reproduce` compares it with the version `llama-quantize` prints. A difference is a note, not a failure: the same file rebuilt byte for byte with llama.cpp releases from May to October 2026. |
+| `quantize_cmd` | the `llama-quantize` command line, read the way `llama-quantize` reads its arguments: `[VAR=value ...] llama-quantize [options] input [output] type [nthreads]`. |
+
+From `quantize_cmd`, `reproduce` takes the type and the options that shape the output, in
+their order: `--tensor-type`, `--output-tensor-type`, `--token-embedding-type`, `--pure`,
+`--leave-output-tensor`, `--override-kv`, `--prune-layers`, `--include-weights`,
+`--exclude-weights` and `--allow-requantize`. The paths and the thread count are not used:
+the rebuild runs on the hash-checked `--source`. `--imatrix` names the matrix's path (the
+file itself records it in `quantize.imatrix.file`), and `--max-buffer-size` only affects
+I/O. `--tensor-type-file` (it needs a file the manifest does not carry), `--keep-split`
+(split output is not supported yet), `--dry-run` and unknown options stop `reproduce` with
+exit 2. Without `quantize_cmd`, the type comes from `model.file_type` and no options are
+used. `--type` overrides either.
+
+The rebuild is compared with the manifest's fingerprint, and with its file sha256 when it
+records one for a single file. Identical bytes pass even against a manifest made with
+`--no-data`.
 
 ## Verifying
 

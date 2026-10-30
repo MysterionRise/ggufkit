@@ -44,14 +44,21 @@ class FakeQuantize:
         self.output = output
         self.calls: list[tuple[list[str], Path]] = []
         self.imatrix_bytes: bytes | None = None
+        self.options: list[str] = []
 
     def __call__(self, argv: list[str], cwd: Path) -> tuple[int, str]:
         self.calls.append((list(argv), cwd))
         assert cwd.is_dir()
         args = argv[1:]
-        if args[0] == "--imatrix":
-            self.imatrix_bytes = (cwd / args[1]).read_bytes()  # relative to cwd, or absolute
-            args = args[2:]
+        self.options = []
+        while args[0].startswith("--"):
+            opt, args = args[0], args[1:]
+            arity = 1 if opt == "--imatrix" else reproduce_mod.RECIPE_OPTIONS[opt]
+            values, args = args[:arity], args[arity:]
+            if opt == "--imatrix":
+                self.imatrix_bytes = (cwd / values[0]).read_bytes()  # relative to cwd, or absolute
+            else:
+                self.options += [opt, *values]
         _source, out = args[0], Path(args[1])
         assert out.is_absolute()
         if self.result is not None:

@@ -239,10 +239,58 @@ tensor changes:
 The exit status is 0 when the rebuild is identical, 1 when it differs (`--allow-metadata`
 accepts a metadata-only difference), and 2 when no rebuild could be made. `--keep FILE`
 saves the rebuild for `diff` or `viz error`, and `--json` prints the report with the
-command and the llama.cpp version. Files made with per-tensor type overrides
-(`llama-quantize --tensor-type`, as in Unsloth's dynamic `UD-` quants) or a modified
-llama.cpp do not rebuild with plain `llama-quantize`; `reproduce` then lists the tensors that
-differ. Determinism was checked on x86_64 Linux; other platforms are not checked yet.
+command and the llama.cpp version. A file made with options that change per-tensor types
+(`llama-quantize --tensor-type` and the like) rebuilds only when those options are known,
+which a manifest can record (below); a file made with a modified llama.cpp does not rebuild
+with plain `llama-quantize`. Either way, `reproduce` lists the tensors that differ.
+Determinism was checked on x86_64 Linux; other platforms are not checked yet.
+
+#### From a manifest
+
+A manifest can record how the file was built: the sha256 of the source and of the importance
+matrix, the llama.cpp commit and the quantize command. `reproduce --manifest` takes the build
+from there. It checks the source and the matrix against the recorded hashes before
+quantizing, takes the type and the recipe options from the recorded command, and compares
+the rebuild with the manifest's fingerprint and file hash, so it checks the publisher's claim
+without the published file. Unsloth publishes no manifest, so this one was made for the
+demo, with the llama.cpp commit used here:
+
+```sh
+ggufkit manifest Qwen3-0.6B-Q4_K_M.gguf --file-sha256 --force \
+  --source Qwen3-0.6B-BF16.gguf --imatrix imatrix_unsloth.dat \
+  --input llama_cpp_commit=8642541 \
+  --input "quantize_cmd=llama-quantize --imatrix Qwen3-0.6B-GGUF/imatrix_unsloth.dat Qwen3-0.6B-BF16.gguf Qwen3-0.6B-Q4_K_M.gguf Q4_K_M"
+```
+
+```console
+$ ggufkit reproduce --manifest Qwen3-0.6B-Q4_K_M.manifest.json --source Qwen3-0.6B-BF16.gguf --imatrix imatrix_unsloth.dat
+checking the sha256 of the source
+checking the sha256 of the importance matrix
+running llama-quantize (Q4_K_M); this can take a while
+comparing the rebuild with Qwen3-0.6B-Q4_K_M.manifest.json
+manifest     Qwen3-0.6B-Q4_K_M.manifest.json
+source       sha256 matches the manifest
+imatrix      sha256 matches the manifest
+type         Q4_K_M
+llama.cpp    0.8.0-dev (build 1, commit 8642541); manifest: same
+command      /usr/local/bin/llama-quantize --imatrix Qwen3-0.6B-GGUF/imatrix_unsloth.dat /home/user/models/Qwen3-0.6B-BF16.gguf /tmp/ggufkit-reproduce-6irulbhf/rebuilt.gguf Q4_K_M
+file bytes   identical
+verdict      identical
+kv           same
+tensor_info  same
+weights      same
+```
+
+A source or matrix whose sha256 differs from the manifest's stops it with exit 2, before
+anything is quantized. A different llama.cpp commit is only a note: the May release rebuilds
+this file byte for byte too. From the recorded command, `reproduce` keeps the options that
+shape the output, such as `--tensor-type`, `--output-tensor-type` and `--pure`, and refuses
+`--tensor-type-file` and `--keep-split`. A Q4_K_M made here with
+`--tensor-type attn_v=q8_0 --output-tensor-type q8_0` rebuilt byte for byte from its
+manifest. With those options left out of `quantize_cmd`, the report listed every `attn_v`
+tensor as retyped. To check a downloaded copy against the same manifest, use
+`verify FILE --manifest MANIFEST`. [docs/MANIFEST.md](https://github.com/MysterionRise/ggufkit/blob/main/docs/MANIFEST.md#build-inputs)
+says how each build input is read.
 
 ### Diff two models
 
@@ -371,14 +419,15 @@ PyTorch checkpoints work too when `torch` is installed (`--model-type torch`).
   a model is benign.** For the first, rebuild it: `reproduce` re-quantizes the source and
   says whether the result is the same file, and `diff --numeric` tells you how far apart
   the two are when it is not. A passing `reproduce` proves the file is what llama.cpp makes
-  from that source and importance matrix; check the source's own hash against its publisher.
+  from that source and importance matrix. With `--manifest`, it also checks that they are the
+  files the manifest names; check the source's own hash against its publisher too.
 
 ## Exit codes
 
 | command | 0 | 1 | 2 |
 |---|---|---|---|
 | `verify` | identical (or metadata-only with `--allow-metadata`) | any other difference; weights or file hashes that could not be compared | error |
-| `reproduce` | the rebuild is identical (or metadata-only with `--allow-metadata`) | the rebuild differs | error, including a missing importance matrix or a failed `llama-quantize` |
+| `reproduce` | the rebuild is identical (or metadata-only with `--allow-metadata`) | the rebuild differs | error, including a missing importance matrix, an input whose sha256 differs from the manifest, or a failed `llama-quantize` |
 | `diff` | nothing differs in the compared sections | something differs | error |
 | `fingerprint`, `manifest`, `stitch`, `viz` | done | | error |
 
@@ -412,8 +461,8 @@ print(result.ok(), result.byte_identical, result.report.verdict)
 
 `fingerprint_file`, `create_manifest`, `verify_file`, `load_manifest` and `save_manifest`
 return `Fingerprint`, `Manifest` (a typed dict in the documented format) and `Report`
-objects; `reproduce_file` returns a `ReproduceResult` and raises `ReproduceError` when no
-rebuild could be made. Every error ggufkit raises for bad input is a `ggufkit.GGUFKitError`, itself a
+objects; `reproduce_file` takes a path or `manifest=`, returns a `ReproduceResult` and
+raises `ReproduceError` when no rebuild could be made. Every error ggufkit raises for bad input is a `ggufkit.GGUFKitError`, itself a
 `ValueError`. The names in `ggufkit.__all__` are stable: they change only in a major release,
 or after a deprecation warning that lasts at least one minor release. The submodules
 (`ggufkit.fingerprint`, `ggufkit.verify`, …) are the command line's implementation and may
@@ -449,8 +498,7 @@ manifest formats. Other implementations of the fingerprint can test against the 
 ## Roadmap
 
 - A gallery of error maps and quant maps for popular open models, built from the real files.
-- `reproduce --manifest`: take the source, importance matrix and llama.cpp revision from a
-  manifest's build inputs, and check their hashes before rebuilding.
+- `reproduce` for recipes that write split files (`llama-quantize --keep-split`).
 
 ## Development
 

@@ -33,6 +33,12 @@ HERO_TENSOR = "blk.0.attn_k.weight"
 PATCH_TENSOR = "blk.0.attn_q.weight"
 # Pools each error map so the palette PNG stays under 300 KB.
 MAX_PIXELS = "262144"
+# How Unsloth's Q4_K_M rebuilds; the imatrix path is the one the file records.
+QUANTIZE_CMD = (
+    "llama-quantize --imatrix Qwen3-0.6B-GGUF/imatrix_unsloth.dat "
+    "Qwen3-0.6B-BF16.gguf Qwen3-0.6B-Q4_K_M.gguf Q4_K_M"
+)
+LLAMA_CPP_COMMIT = "8642541"
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
@@ -157,6 +163,27 @@ def main() -> int:
     imatrix = str(paths["imatrix_unsloth.dat"])
     ggufkit("reproduce", q4km, "--source", bf16, "--imatrix", imatrix)
     ggufkit("reproduce", q4km, "--source", bf16, "--imatrix", imatrix, "--type", "Q4_K_S")
+
+    # The same rebuild from a manifest that records the build inputs. Unsloth publishes none,
+    # so it is written here, with the llama.cpp commit the README output was recorded with.
+    ggufkit(
+        "manifest",
+        q4km,
+        "-o",
+        str(manifest),
+        "--file-sha256",
+        "--force",
+        "--source",
+        bf16,
+        "--imatrix",
+        imatrix,
+        "--input",
+        f"llama_cpp_commit={LLAMA_CPP_COMMIT}",
+        "--input",
+        f"quantize_cmd={QUANTIZE_CMD}",
+        "-q",
+    )
+    ggufkit("reproduce", "--manifest", str(manifest), "--source", bf16, "--imatrix", imatrix)
     return 0
 
 
