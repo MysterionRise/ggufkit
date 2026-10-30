@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `ggufkit reproduce TARGET --source SOURCE [--imatrix FILE]`: rebuild a quantized file with
+  llama.cpp's `llama-quantize` and compare the rebuild with it, as `verify --against` does,
+  plus the raw bytes. The type comes from `general.file_type` (`--type` overrides it). A file
+  that records an importance matrix needs it (`--imatrix`), and the matrix is placed at the
+  relative path the file records, so `quantize.imatrix.file` matches too. Exit status 0
+  when identical, 1 when it differs, 2 when no rebuild could be made. With Unsloth's
+  importance matrix, it rebuilds their Qwen3-0.6B Q4_K_M and Q8_0 files byte for byte (#22).
+- `ggufkit reproduce --manifest FILE --source SOURCE [--imatrix FILE]`: rebuild the file a
+  manifest describes from its build inputs. The source and the importance matrix are checked
+  against `source_sha256` and `imatrix_sha256` before anything is quantized; the type and the
+  options that shape the output (`--tensor-type`, `--output-tensor-type`, `--pure`, …) come
+  from `quantize_cmd`; and the rebuild is compared with the manifest's fingerprint and file
+  hash, so the published file is not needed. `llama_cpp_commit` is compared with the
+  `llama-quantize` that ran, as a note. `docs/MANIFEST.md` says how each build input is read.
+- `ggufkit manifest --source MODEL --imatrix FILE` hashes those files into `source_sha256`
+  and `imatrix_sha256` (one sha256 per shard, comma-separated, for a split source).
+- `ggufkit.reproduce_file`, `ReproduceResult` and `ReproduceError` in the Python API.
+  `reproduce_file` takes a path or `manifest=`, and `create_manifest` takes `source=` and
+  `imatrix=`.
+
 ## [0.2.0] - 2026-10-28
 
 A stable Python API and published test vectors for the fingerprint. No fingerprint or manifest

@@ -12,6 +12,7 @@ from ggufkit import __version__
 from ggufkit import diff as diff_cmd
 from ggufkit import fingerprint as fingerprint_cmd
 from ggufkit import manifest as manifest_cmd
+from ggufkit import reproduce as reproduce_cmd
 from ggufkit import stitch as stitch_cmd
 from ggufkit import verify as verify_cmd
 from ggufkit import viz as viz_cmd
@@ -35,6 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     fingerprint_cmd.add_parser(sub)
     manifest_cmd.add_parser(sub)
     verify_cmd.add_parser(sub)
+    reproduce_cmd.add_parser(sub)
     diff_cmd.add_parser(sub)
     stitch_cmd.add_parser(sub)
     viz_cmd.add_parser(sub)
