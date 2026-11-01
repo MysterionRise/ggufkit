@@ -4,7 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] - 2026-11-01
+
+Check a published quant by building it again. `ggufkit reproduce` runs llama.cpp's
+`llama-quantize` on the source and compares the rebuild with the file, or, with
+`--manifest`, with what a manifest records after checking the source and importance matrix
+against its hashes. No fingerprint or manifest format changes: every `ggufkit-fp/1` digest
+and `ggufkit-manifest/1` manifest from 0.2.0 is unchanged.
 
 ### Added
 
@@ -108,5 +114,6 @@ First release. Supports Python 3.11 to 3.14.
 Builds on [KerfuffleV2/gguf-tools](https://github.com/KerfuffleV2/gguf-tools) (MIT, 2023):
 `gguf-checksum`, `gguf-frankenstein` and `gguf-tensor-to-image`, whose history is preserved.
 
+[0.3.0]: https://github.com/MysterionRise/ggufkit/releases/tag/v0.3.0
 [0.2.0]: https://github.com/MysterionRise/ggufkit/releases/tag/v0.2.0
 [0.1.0]: https://github.com/MysterionRise/ggufkit/releases/tag/v0.1.0
