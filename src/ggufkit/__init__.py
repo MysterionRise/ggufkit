@@ -16,18 +16,20 @@ except PackageNotFoundError:  # pragma: no cover - only when running from a bare
     __version__ = "0.0.0+unknown"
 
 if TYPE_CHECKING:
-    from ggufkit.api import create_manifest, fingerprint_file, verify_file
+    from ggufkit.api import create_manifest, fingerprint_file, reproduce_file, verify_file
     from ggufkit.canon import UnsupportedModelError
     from ggufkit.errors import GGUFKitError
     from ggufkit.fingerprint import Fingerprint, TensorFingerprint
     from ggufkit.manifest import IntotoError, Manifest, ManifestError, load_manifest, save_manifest
     from ggufkit.model import ModelError
+    from ggufkit.reproduce import ReproduceError, ReproduceResult
     from ggufkit.verify import KeyChange, Report, TensorChange
 
 _EXPORTS = {
     "fingerprint_file": "ggufkit.api",
     "create_manifest": "ggufkit.api",
     "verify_file": "ggufkit.api",
+    "reproduce_file": "ggufkit.api",
     "load_manifest": "ggufkit.manifest",
     "save_manifest": "ggufkit.manifest",
     "Fingerprint": "ggufkit.fingerprint",
@@ -36,11 +38,13 @@ _EXPORTS = {
     "Report": "ggufkit.verify",
     "KeyChange": "ggufkit.verify",
     "TensorChange": "ggufkit.verify",
+    "ReproduceResult": "ggufkit.reproduce",
     "GGUFKitError": "ggufkit.errors",
     "ModelError": "ggufkit.model",
     "UnsupportedModelError": "ggufkit.canon",
     "ManifestError": "ggufkit.manifest",
     "IntotoError": "ggufkit.manifest",
+    "ReproduceError": "ggufkit.reproduce",
 }
 
 __all__ = [
@@ -52,6 +56,8 @@ __all__ = [
     "ManifestError",
     "ModelError",
     "Report",
+    "ReproduceError",
+    "ReproduceResult",
     "TensorChange",
     "TensorFingerprint",
     "UnsupportedModelError",
@@ -59,6 +65,7 @@ __all__ = [
     "create_manifest",
     "fingerprint_file",
     "load_manifest",
+    "reproduce_file",
     "save_manifest",
     "verify_file",
 ]

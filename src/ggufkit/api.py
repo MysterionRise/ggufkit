@@ -1,4 +1,4 @@
-"""ggufkit's stable Python API: three functions that take paths and return plain results.
+"""ggufkit's stable Python API: functions that take paths and return plain results.
 
 Everything listed in ``ggufkit.__all__`` is stable: it changes only in a major release, or
 after a deprecation warning that lasts at least one minor release. Import it from the
@@ -18,16 +18,18 @@ implementation and may change in any release.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ggufkit._util import prepare_output
 from ggufkit.fingerprint import Fingerprint, fingerprint
-from ggufkit.manifest import Manifest, build_manifest, load_manifest
+from ggufkit.manifest import Manifest, build_manifest, load_manifest, with_input_hashes
 from ggufkit.model import open_model
+from ggufkit.reproduce import ReproduceResult, reproduce, reproduce_from_manifest
 from ggufkit.verify import Report, verify_against_file, verify_against_manifest
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
 
 
 def fingerprint_file(
@@ -57,6 +59,8 @@ def create_manifest(
     *,
     file_sha256: bool = False,
     build_inputs: Mapping[str, str] | None = None,
+    source: str | Path | None = None,
+    imatrix: str | Path | None = None,
     notes: str | None = None,
     data: bool = True,
     jobs: int = 1,
@@ -66,13 +70,15 @@ def create_manifest(
     ``file_sha256`` also records each file's plain sha256 (it reads every file once more).
     ``build_inputs`` records how the file was made, under the keys ``docs/MANIFEST.md``
     lists (``source_sha256``, ``imatrix_sha256``, ``llama_cpp_commit``, ``quantize_cmd``).
-    Save the result with :func:`ggufkit.save_manifest`.
+    ``source`` and ``imatrix`` are files to hash into ``source_sha256`` and
+    ``imatrix_sha256``. Save the result with :func:`ggufkit.save_manifest`.
     """
+    inputs = with_input_hashes(build_inputs, source=source, imatrix=imatrix)
     with open_model(path) as model:
         return build_manifest(
             model,
             file_sha256=file_sha256,
-            build_inputs=build_inputs,
+            build_inputs=inputs,
             notes=notes,
             data=data,
             jobs=jobs,
@@ -124,3 +130,49 @@ def verify_file(
             )
     msg = "give exactly one of against= or manifest="
     raise TypeError(msg)
+
+
+def reproduce_file(
+    path: str | Path | None = None,
+    *,
+    source: str | Path,
+    manifest: str | Path | Mapping[str, Any] | None = None,
+    imatrix: str | Path | None = None,
+    quant_type: str | None = None,
+    llama_quantize: str | Path | None = None,
+    threads: int | None = None,
+    keep: str | Path | None = None,
+    force: bool = False,
+    jobs: int = 1,
+) -> ReproduceResult:
+    """Rebuild a quantized GGUF file from its source with llama-quantize, and compare.
+
+    Give the file to check as ``path``, or a manifest (a path, or one already loaded) as
+    ``manifest``. ``source`` is the full-precision model it was made from. ``imatrix`` is
+    the importance matrix, which a file that records one needs. ``quant_type`` defaults to
+    the manifest's ``quantize_cmd`` or the file's ``general.file_type``, and
+    ``llama_quantize`` to the binary on PATH. ``keep`` saves the rebuild (``force``
+    overwrites an existing file). :meth:`ReproduceResult.ok` is the pass or fail, and
+    :attr:`ReproduceResult.report` says what differs.
+
+    With a manifest, the source and the matrix are checked against its ``source_sha256``
+    and ``imatrix_sha256`` first, and :attr:`ReproduceResult.inputs` says how they compared.
+    Raises :class:`ggufkit.ReproduceError` when no rebuild could be made.
+    """
+    if (path is None) == (manifest is None):
+        msg = "give exactly one of path or manifest="
+        raise TypeError(msg)
+    if keep is not None:
+        prepare_output(Path(keep), force=force)
+    options: dict[str, Any] = {
+        "imatrix": imatrix,
+        "quant_type": quant_type,
+        "threads": threads,
+        "llama_quantize": llama_quantize,
+        "keep": keep,
+        "jobs": jobs,
+    }
+    if path is None:
+        return reproduce_from_manifest(manifest or {}, source, **options)
+    with open_model(path) as model:
+        return reproduce(model, source, **options)

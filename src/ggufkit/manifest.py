@@ -24,14 +24,14 @@ from gguf import GGMLQuantizationType, GGUFEndian
 from gguf.constants import Keys, LlamaFileType
 
 from ggufkit import __version__, canon
-from ggufkit._util import positive_int, prepare_output, write_text_atomic
+from ggufkit._util import positive_int, prepare_output, to_stderr, write_text_atomic
 from ggufkit.errors import GGUFKitError
 from ggufkit.fingerprint import Fingerprint, default_jobs, fingerprint
-from ggufkit.model import SHARD_RE, open_model
+from ggufkit.model import SHARD_RE, open_model, shard_paths
 
 if TYPE_CHECKING:
     import argparse
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from ggufkit.model import Model
 
@@ -363,6 +363,34 @@ def parse_build_inputs(items: list[str] | None) -> dict[str, str]:
     return out
 
 
+def with_input_hashes(
+    build_inputs: Mapping[str, str] | None,
+    *,
+    source: str | Path | None = None,
+    imatrix: str | Path | None = None,
+    log: Callable[[str], None] | None = None,
+) -> dict[str, str]:
+    """Return ``build_inputs`` plus the sha256 of the given source and importance matrix.
+
+    ``source_sha256`` is the source file's sha256, or for a split source each shard's, joined
+    with commas in shard order. A hash given both ways is an error.
+    """
+    inputs = dict(build_inputs or {})
+    files = {"source_sha256": source, "imatrix_sha256": imatrix}
+    for key, path in files.items():
+        if path is not None and key in inputs:
+            flag = key.removesuffix("_sha256")
+            msg = f"--{flag} and --input {key} both set {key}; give one"
+            raise ManifestError(msg)
+    for key, path in files.items():
+        if path is None:
+            continue
+        if log is not None:
+            log(f"hashing {path}")
+        inputs[key] = ",".join(sha256_file(p) for p in shard_paths(path))
+    return inputs
+
+
 def build_manifest(
     model: Model,
     *,
@@ -579,6 +607,18 @@ def add_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None
         metavar="KEY=VALUE",
         help=f"record a build input ({', '.join(BUILD_INPUT_KEYS)} or any key); repeatable",
     )
+    p.add_argument(
+        "--source",
+        type=Path,
+        metavar="MODEL",
+        help="the model this file was quantized from: record its sha256 as source_sha256",
+    )
+    p.add_argument(
+        "--imatrix",
+        type=Path,
+        metavar="FILE",
+        help="the importance matrix it was made with: record its sha256 as imatrix_sha256",
+    )
     p.add_argument("--note", help="free-text note stored in the manifest")
     p.add_argument("--no-data", action="store_true", help="skip tensor bytes (no weights digest)")
     p.add_argument("--no-per-tensor", action="store_true", help="omit per-tensor digests")
@@ -597,6 +637,12 @@ def run(args: argparse.Namespace) -> int:
     for path in (target, args.intoto):
         if path is not None:
             prepare_output(path, force=args.force)
+    inputs = with_input_hashes(
+        inputs,
+        source=args.source,
+        imatrix=args.imatrix,
+        log=None if args.quiet or args.json or to_stdout_only else to_stderr,
+    )
     with open_model(args.model) as model:
         manifest = build_manifest(
             model,

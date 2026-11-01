@@ -26,6 +26,8 @@ PUBLIC = {
     "ManifestError",
     "ModelError",
     "Report",
+    "ReproduceError",
+    "ReproduceResult",
     "TensorChange",
     "TensorFingerprint",
     "UnsupportedModelError",
@@ -33,6 +35,7 @@ PUBLIC = {
     "create_manifest",
     "fingerprint_file",
     "load_manifest",
+    "reproduce_file",
     "save_manifest",
     "verify_file",
 }
@@ -56,7 +59,13 @@ def test_import_ggufkit_loads_nothing_heavy() -> None:
 
 
 def test_every_error_is_a_ggufkit_error_and_a_value_error() -> None:
-    for name in ("ModelError", "UnsupportedModelError", "ManifestError", "IntotoError"):
+    for name in (
+        "ModelError",
+        "UnsupportedModelError",
+        "ManifestError",
+        "IntotoError",
+        "ReproduceError",
+    ):
         cls = getattr(ggufkit, name)
         assert issubclass(cls, ggufkit.GGUFKitError)
         assert issubclass(cls, ValueError)
