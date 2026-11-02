@@ -53,6 +53,10 @@ and depend on.
 - `tests/test_golden.py` pins the `ggufkit-fp/1` byte format. If your change makes it fail, you
   have changed the specification: give it a new id (`ggufkit-fp/2`), update the docs, and only
   then run `uv run pytest --update-golden`.
+- `tests/test_vectors.py` checks the published test vectors in `tests/vectors/` the same way,
+  and also against `tests/fp_reference.py`, an implementation written from the spec text. If
+  the reference disagrees, fix the text or the reference, not the vectors. To add a vector,
+  edit `scripts/make_vectors.py` and run `uv run python scripts/make_vectors.py`.
 - Manifest changes that remove or rename fields need a new schema id; adding optional fields
   does not.
 
