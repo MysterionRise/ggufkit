@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/).
 
-## [0.3.0] - 2026-11-01
+## [0.3.0] - 2026-11-03
 
 Check a published quant by building it again. `ggufkit reproduce` runs llama.cpp's
 `llama-quantize` on the source and compares the rebuild with the file, or, with
