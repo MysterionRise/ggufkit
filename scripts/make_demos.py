@@ -53,10 +53,27 @@ MAX_LINE = 1000
 def get_tool_versions() -> dict[str, str | None]:
     """Return the versions of the external tools used to record the demos."""
 
+    def cosign_version() -> str | None:
+        cosign = os.environ.get("COSIGN") or "cosign"
+        try:
+            out = subprocess.run(  # noqa: S603
+                [cosign, "version", "--json"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            )
+        except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            return None
+        try:
+            return json.loads(out.stdout).get("gitVersion")
+        except (json.JSONDecodeError, TypeError):
+            return None
+
     def first_line(*argv: str) -> str | None:
         try:
-            out = subprocess.run(argv, capture_output=True, text=True, check=True)  # noqa: S603
-        except (FileNotFoundError, subprocess.CalledProcessError):
+            out = subprocess.run(argv, capture_output=True, text=True, check=True, timeout=30)  # noqa: S603
+        except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
             return None
         return out.stdout.strip().splitlines()[0] if out.stdout.strip() else None
 
@@ -66,7 +83,7 @@ def get_tool_versions() -> dict[str, str | None]:
         gguf_version = None
 
     return {
-        "cosign": first_line("cosign", "version"),
+        "cosign": cosign_version(),
         "ffmpeg": first_line("ffmpeg", "-version"),
         "ggufkit": first_line("ggufkit", "--version"),
         "gguf": gguf_version,
@@ -405,6 +422,7 @@ def main() -> int:
         print("* publishing the original")
         pub = publish(rec, args.work, q4km)
         recorded = json.loads(data.read_text()) if data.is_file() else {}
+        recorded.pop("tools", None)
         for name in args.only:
             print(f"* {name}")
             if name == "signature":

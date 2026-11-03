@@ -39,7 +39,7 @@ if (!dataPath) {
   process.exit(2);
 }
 const data = JSON.parse(readFileSync(dataPath, "utf8"));
-const names = only.length ? only : Object.keys(data);
+const names = only.length ? only : Object.keys(data).filter((k) => k !== "tools");
 const formats = formatArg ? formatArg.split("=")[1].split(",") : DEFAULT_FORMATS;
 const unknown = formats.filter((f) => !(f in FORMATS));
 if (unknown.length) {
