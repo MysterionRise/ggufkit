@@ -101,7 +101,7 @@ def test_malformed_files_exit_2_without_traceback(
 
 
 def test_header_check_rejects_before_the_reader_runs(bad_files: dict[str, Path]) -> None:
-    for name in ("huge-array", "huge-string", "huge-counts","huge-uint8-array", "unknown-type", "truncated-header"):
+    for name in ("huge-array", "huge-string", "huge-counts", "huge-uint8-array", "unknown-type", "truncated-header"):
         with pytest.raises(ModelError, match="not a valid GGUF file"):
             check_header(bad_files[name])
 
