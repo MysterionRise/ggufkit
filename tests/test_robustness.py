@@ -50,7 +50,7 @@ def malformed_files(tmp_path: Path, good: Path) -> dict[str, Path]:
         ),
         "huge-string": raw_gguf([gguf_string("a") + struct.pack("<IQ", V.STRING, 1 << 50)]),
         "huge-counts": raw_gguf([], n_kv=1 << 60),
-        "huge-unit8-array": raw_gguf([gguf_string("a") + struct.pack("<IIQ", V.ARRAY, V.UINT8, 1 << 40)]),
+        "huge-uint8-array": raw_gguf([gguf_string("a") + struct.pack("<IIQ", V.ARRAY, V.UINT8, 1 << 40)]),
         "unknown-type": raw_gguf([gguf_string("a") + struct.pack("<I", 99) + b"\x00" * 8]),
         "duplicate-key": raw_gguf([kv_u32("general.x", 1), kv_u32("general.x", 2)]),
     }
