@@ -18,19 +18,20 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 from gguf import GGMLQuantizationType, GGUFEndian
 from gguf.constants import Keys, LlamaFileType
 
 from ggufkit import __version__, canon
-from ggufkit._util import positive_int, prepare_output, write_text_atomic
+from ggufkit._util import positive_int, prepare_output, to_stderr, write_text_atomic
+from ggufkit.errors import GGUFKitError
 from ggufkit.fingerprint import Fingerprint, default_jobs, fingerprint
-from ggufkit.model import SHARD_RE, open_model
+from ggufkit.model import SHARD_RE, open_model, shard_paths
 
 if TYPE_CHECKING:
     import argparse
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from ggufkit.model import Model
 
@@ -83,8 +84,74 @@ EXPECTED_PROVENANCE: tuple[tuple[str, str], ...] = (
 )
 
 
-class ManifestError(ValueError):
+class ManifestError(GGUFKitError):
     """Raised for manifests ggufkit cannot read or does not understand."""
+
+
+class ManifestTool(TypedDict):
+    name: str
+    version: str
+    gguf_py: str
+    python: str
+    fingerprint_spec: str
+
+
+class ManifestShard(TypedDict):
+    no: int
+    count: int
+
+
+class ManifestFile(TypedDict):
+    path: str
+    size: int
+    sha256: str | None
+    shard: ManifestShard | None
+
+
+class ManifestGGUF(TypedDict):
+    version: int
+    endianness: str
+    alignment: int
+    n_kv: int
+    n_tensors: int
+    n_shards: int
+
+
+class ManifestModel(TypedDict):
+    architecture: str | None
+    file_type: str | None
+    file_type_id: int | None
+    quantization_version: Any
+    parameter_count: int
+    tensor_bytes: int
+    tensor_type_counts: dict[str, int]
+    tensor_type_bytes: dict[str, int]
+
+
+class ManifestScore(TypedDict):
+    recorded: int
+    expected: int
+
+
+class Manifest(TypedDict):
+    """A ``ggufkit-manifest/1`` manifest, as documented in ``docs/MANIFEST.md``.
+
+    ``provenance`` holds only the keys the file's metadata has, and ``fingerprint`` is the
+    fingerprint's JSON form (:meth:`ggufkit.Fingerprint.to_dict`), so both stay loosely typed.
+    """
+
+    schema: str
+    created_at: str
+    tool: ManifestTool
+    files: list[ManifestFile]
+    gguf: ManifestGGUF
+    model: ManifestModel
+    provenance: dict[str, Any]
+    provenance_gaps: list[str]
+    provenance_score: ManifestScore
+    build_inputs: dict[str, str]
+    notes: str | None
+    fingerprint: dict[str, Any]
 
 
 def _kv(model: Model, key: str) -> Any | None:
@@ -246,7 +313,7 @@ def file_type_label(file_type_id: int | None) -> str | None:
     return name
 
 
-def model_facts(model: Model) -> dict[str, Any]:
+def model_facts(model: Model) -> ManifestModel:
     file_type_id = _kv(model, Keys.General.FILE_TYPE)
     counts = Counter(t.tensor_type.name for t in model.tensors)
     bytes_by_type: Counter[str] = Counter()
@@ -272,7 +339,7 @@ def sha256_file(path: Path, chunk_size: int = canon.CHUNK_SIZE) -> str:
     return digest.hexdigest()
 
 
-def file_entries(model: Model, *, with_sha256: bool) -> list[dict[str, Any]]:
+def file_entries(model: Model, *, with_sha256: bool) -> list[ManifestFile]:
     n = model.n_shards
     return [
         {
@@ -296,6 +363,34 @@ def parse_build_inputs(items: list[str] | None) -> dict[str, str]:
     return out
 
 
+def with_input_hashes(
+    build_inputs: Mapping[str, str] | None,
+    *,
+    source: str | Path | None = None,
+    imatrix: str | Path | None = None,
+    log: Callable[[str], None] | None = None,
+) -> dict[str, str]:
+    """Return ``build_inputs`` plus the sha256 of the given source and importance matrix.
+
+    ``source_sha256`` is the source file's sha256, or for a split source each shard's, joined
+    with commas in shard order. A hash given both ways is an error.
+    """
+    inputs = dict(build_inputs or {})
+    files = {"source_sha256": source, "imatrix_sha256": imatrix}
+    for key, path in files.items():
+        if path is not None and key in inputs:
+            flag = key.removesuffix("_sha256")
+            msg = f"--{flag} and --input {key} both set {key}; give one"
+            raise ManifestError(msg)
+    for key, path in files.items():
+        if path is None:
+            continue
+        if log is not None:
+            log(f"hashing {path}")
+        inputs[key] = ",".join(sha256_file(p) for p in shard_paths(path))
+    return inputs
+
+
 def build_manifest(
     model: Model,
     *,
@@ -306,7 +401,7 @@ def build_manifest(
     data: bool = True,
     per_tensor: bool = True,
     jobs: int = 1,
-) -> dict[str, Any]:
+) -> Manifest:
     if fp is None:
         fp = fingerprint(model, data=data, per_tensor=per_tensor, per_kv=True, jobs=jobs)
     inputs = dict(build_inputs or {})
@@ -349,7 +444,7 @@ def build_manifest(
     }
 
 
-def load_manifest(path: str | Path) -> dict[str, Any]:
+def load_manifest(path: str | Path) -> Manifest:
     try:
         manifest = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
@@ -363,7 +458,7 @@ def load_manifest(path: str | Path) -> dict[str, Any]:
         msg = f"{path} carries a fingerprint spec ggufkit does not understand"
         raise ManifestError(msg)
     _check_structure(path, manifest)
-    return manifest
+    return cast("Manifest", manifest)
 
 
 def _check_structure(path: str | Path, manifest: dict[str, Any]) -> None:
@@ -512,6 +607,18 @@ def add_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None
         metavar="KEY=VALUE",
         help=f"record a build input ({', '.join(BUILD_INPUT_KEYS)} or any key); repeatable",
     )
+    p.add_argument(
+        "--source",
+        type=Path,
+        metavar="MODEL",
+        help="the model this file was quantized from: record its sha256 as source_sha256",
+    )
+    p.add_argument(
+        "--imatrix",
+        type=Path,
+        metavar="FILE",
+        help="the importance matrix it was made with: record its sha256 as imatrix_sha256",
+    )
     p.add_argument("--note", help="free-text note stored in the manifest")
     p.add_argument("--no-data", action="store_true", help="skip tensor bytes (no weights digest)")
     p.add_argument("--no-per-tensor", action="store_true", help="omit per-tensor digests")
@@ -530,6 +637,12 @@ def run(args: argparse.Namespace) -> int:
     for path in (target, args.intoto):
         if path is not None:
             prepare_output(path, force=args.force)
+    inputs = with_input_hashes(
+        inputs,
+        source=args.source,
+        imatrix=args.imatrix,
+        log=None if args.quiet or args.json or to_stdout_only else to_stderr,
+    )
     with open_model(args.model) as model:
         manifest = build_manifest(
             model,
